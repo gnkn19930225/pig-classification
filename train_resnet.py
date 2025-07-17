@@ -9,6 +9,8 @@ import numpy as np
 from PIL import Image
 import os
 from datetime import datetime
+from sklearn.model_selection import train_test_split
+import shutil
 
 # 自定義回調函數：保存最佳權重並自動刪除舊檔案
 class BestModelCheckpoint(Callback):
@@ -75,6 +77,77 @@ def lr_schedule(epoch):
     epochs_drop = 10     # 每 10 個 epoch 進行衰減
     return initial_lr * (decay_rate ** (epoch // epochs_drop))
 
+def prepare_data_split(data_dir, train_ratio=0.8, random_state=42):
+    """
+    準備訓練和驗證資料分割
+    
+    Args:
+        data_dir: 包含所有類別資料夾的目錄路徑
+        train_ratio: 訓練資料比例，預設為0.8（80%）
+        random_state: 隨機種子，確保結果可重現
+    
+    Returns:
+        train_generator: 訓練資料生成器
+        validation_generator: 驗證資料生成器
+    """
+    # 建立臨時訓練和驗證目錄
+    temp_train_dir = 'temp_train'
+    temp_val_dir = 'temp_val'
+    
+    # 如果臨時目錄已存在，先刪除
+    if os.path.exists(temp_train_dir):
+        shutil.rmtree(temp_train_dir)
+    if os.path.exists(temp_val_dir):
+        shutil.rmtree(temp_val_dir)
+    
+    # 建立臨時目錄結構
+    os.makedirs(temp_train_dir, exist_ok=True)
+    os.makedirs(temp_val_dir, exist_ok=True)
+    
+    # 遍歷每個類別資料夾
+    for class_name in os.listdir(data_dir):
+        class_path = os.path.join(data_dir, class_name)
+        
+        # 跳過非目錄的檔案
+        if not os.path.isdir(class_path):
+            continue
+            
+        # 建立對應的訓練和驗證目錄
+        train_class_dir = os.path.join(temp_train_dir, class_name)
+        val_class_dir = os.path.join(temp_val_dir, class_name)
+        os.makedirs(train_class_dir, exist_ok=True)
+        os.makedirs(val_class_dir, exist_ok=True)
+        
+        # 獲取該類別的所有圖片檔案
+        image_files = [f for f in os.listdir(class_path) 
+                      if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))]
+        
+        # 分割訓練和驗證資料
+        train_files, val_files = train_test_split(
+            image_files, 
+            train_size=train_ratio, 
+            random_state=random_state,
+            shuffle=True
+        )
+        
+        # 複製檔案到對應目錄
+        for file_name in train_files:
+            src_path = os.path.join(class_path, file_name)
+            dst_path = os.path.join(train_class_dir, file_name)
+            shutil.copy2(src_path, dst_path)
+            
+        for file_name in val_files:
+            src_path = os.path.join(class_path, file_name)
+            dst_path = os.path.join(val_class_dir, file_name)
+            shutil.copy2(src_path, dst_path)
+        
+        print(f"類別 {class_name}: 訓練 {len(train_files)} 張，驗證 {len(val_files)} 張")
+    return temp_train_dir, temp_val_dir
+
+# 準備資料分割
+print("正在準備訓練和驗證資料分割...")
+train_dir, val_dir = prepare_data_split('data', train_ratio=0.8, random_state=42)
+
 # 訓練數據生成器（包含數據增強）
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
@@ -92,7 +165,7 @@ val_datagen = ImageDataGenerator(
 
 # 訓練數據生成器
 train_generator = train_datagen.flow_from_directory(
-    'data/train',
+    train_dir,
     target_size=(360, 640),
     batch_size=16,
     class_mode='categorical'
@@ -101,7 +174,7 @@ print(train_generator.class_indices)
 
 # 驗證數據生成器（使用獨立的驗證資料夾）
 validation_generator = val_datagen.flow_from_directory(
-    'data/val',
+    val_dir,
     target_size=(360, 640),
     batch_size=32,
     class_mode='categorical',
@@ -253,7 +326,7 @@ for i, wp in enumerate(wrong_predictions, 1):
 for i, wp in enumerate(wrong_predictions):
     try:
         # 構建完整的圖片路徑
-        img_path = os.path.join('data/val', wp['filename'])
+        img_path = os.path.join(val_dir, wp['filename'])
         
         # 檢查檔案是否存在
         if not os.path.exists(img_path):
@@ -273,3 +346,11 @@ for i, wp in enumerate(wrong_predictions):
         
     except Exception as e:
         print(f"載入圖片 {wp['filename']} 時發生錯誤: {str(e)}")
+# 清理臨時目錄
+print("清理臨時目錄...")
+try:
+    shutil.rmtree(train_dir)
+    shutil.rmtree(val_dir)
+    print("臨時目錄清理完成")
+except Exception as e:
+    print(f"清理臨時目錄時發生錯誤: {e}")
