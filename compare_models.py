@@ -8,7 +8,6 @@ import io
 import time
 import os
 from datetime import datetime, timezone, timedelta
-import csv
 
 # 牧場設定字典
 # 格式：{牧場名稱: {主機位址, 輸出目錄}}
@@ -281,24 +280,6 @@ def plot_comparison(image, h5_pred, onnx_pred, farm_name, camera_name):
     plt.tight_layout()
     plt.show()
 
-def save_comparison_results(results, output_file='comparison_results.csv'):
-    """將比較結果保存到 CSV 檔案"""
-    # 檢查檔案是否存在，如果不存在則建立標題列
-    file_exists = os.path.exists(output_file)
-    
-    with open(output_file, 'a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['timestamp', 'farm_name', 'camera_name', 'h5_prediction', 'h5_confidence', 
-                     'onnx_prediction', 'onnx_confidence', 'is_consistent', 'max_difference']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        # 如果檔案不存在，寫入標題列
-        if not file_exists:
-            writer.writeheader()
-        
-        # 寫入結果資料
-        writer.writerow(results)
-    
-    print(f"✓ 結果已保存至 {output_file}")
 
 def process_farm_batch(farm_name, farm_setting, h5_model, onnx_model_path):
     """批次處理單一牧場的所有攝影機"""
@@ -353,11 +334,30 @@ def process_farm_batch(farm_name, farm_setting, h5_model, onnx_model_path):
                     'max_difference': comparison['max_difference']
                 }
                 
-                # 保存結果到 CSV
-                save_comparison_results(result_data)
+                # 移除保存 CSV 功能
                 
-                # 暫停一下讓用戶檢視圖表
-                input("按 Enter 繼續下一張圖片...")
+                # 暫停一下讓用戶檢視圖表並選擇操作
+                print("\n操作選項:")
+                print("按 Enter - 繼續下一張圖片")
+                print("按 's' - 儲存原始圖片用於訓練")
+                
+                user_input = input("請選擇操作: ").strip().lower()
+                
+                if user_input == 's':
+                    # 儲存原始圖片用於訓練
+                    try:
+                        # 生成檔案名稱（包含牧場、攝影機和時間戳記）
+                        timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")
+                        filename = f"{farm_name}_{camera_name}_{timestamp}.jpg"
+                        filepath = os.path.join("prepared_for_training", filename)
+                        
+                        # 保存原始圖片
+                        image.save(filepath, "JPEG", quality=95)
+                        print(f"✓ 原始圖片已保存至: {filepath}")
+                        
+                    except Exception as e:
+                        print(f"❌ 保存訓練圖片時發生錯誤: {e}")
+                
                 plt.close('all')  # 關閉當前圖表
                 
             except Exception as e:
@@ -380,8 +380,8 @@ def main():
         h5_model.load_weights(h5_model_path)
         print("✓ H5 模型載入成功")
         
-        # 建立結果輸出目錄
-        os.makedirs("comparison_results", exist_ok=True)
+        # 建立準備用於訓練的圖片主目錄
+        os.makedirs("prepared_for_training", exist_ok=True)
         
         # 處理每個牧場
         total_farms = len(FARM_SETTINGS)
@@ -396,7 +396,6 @@ def main():
         
         print(f"\n{'='*80}")
         print("所有牧場處理完成！")
-        print("結果已保存至 comparison_results.csv")
         print(f"{'='*80}")
         
     except Exception as e:
