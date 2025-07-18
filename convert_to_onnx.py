@@ -37,35 +37,12 @@ def rebuild_and_convert(weights_path, onnx_output_path):
     """
     try:
         import tensorflow as tf
-        from tensorflow.keras.applications import ResNet50
-        from tensorflow.keras.models import Model
-        from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+        from model_architecture import create_resnet_model
         
         print("正在重建模型架構...")
         
-        # 建立與您的訓練腳本相同的模型架構
-        base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(360, 640, 3))
-        
-        # 添加自定義分類層
-        x = base_model.output
-        x = GlobalAveragePooling2D()(x)
-        x = Dense(1024, activation='relu')(x)
-        x = Dropout(0.5)(x)
-        predictions = Dense(3, activation='softmax')(x)
-        
-        # 建立完整模型
-        model = Model(inputs=base_model.input, outputs=predictions)
-        
-        # 凍結基礎模型的權重（與訓練時相同）
-        for layer in base_model.layers:
-            layer.trainable = False
-            
-        # 編譯模型
-        model.compile(
-            optimizer='adam',
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
-        )
+        # 使用共用模型架構建立模型
+        model = create_resnet_model(input_shape=(360, 640, 3), num_classes=3)
         
         print("✓ 模型架構重建完成")
         print("\n模型摘要:")

@@ -1,9 +1,6 @@
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications.resnet50 import preprocess_input
-from tensorflow.keras.callbacks import LearningRateScheduler, Callback
+from tensorflow.keras.callbacks import LearningRateScheduler, Callback, EarlyStopping, ReduceLROnPlateau
+from model_architecture import create_resnet_model, get_preprocess_function
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -11,6 +8,7 @@ import os
 from datetime import datetime
 from sklearn.model_selection import train_test_split
 import shutil
+import random
 
 # 自定義回調函數：保存最佳權重並自動刪除舊檔案
 class BestModelCheckpoint(Callback):
@@ -65,17 +63,6 @@ class BestModelCheckpoint(Callback):
             
             if self.verbose:
                 print(f"\n保存新的最佳權重: {new_filepath} (val_accuracy: {current:.4f})")
-
-# 學習率衰減：每 10 個 epoch 降低 50%
-def lr_schedule(epoch):
-    """
-    學習率調度函數
-    每 10 個 epoch 將學習率乘以 0.5（降低 50%）
-    """
-    initial_lr = 0.0001  # 初始學習率
-    decay_rate = 0.6     # 衰減率
-    epochs_drop = 10     # 每 10 個 epoch 進行衰減
-    return initial_lr * (decay_rate ** (epoch // epochs_drop))
 
 def prepare_data_split(data_dir, train_ratio=0.8, random_state=42):
     """
@@ -144,17 +131,24 @@ def prepare_data_split(data_dir, train_ratio=0.8, random_state=42):
         print(f"類別 {class_name}: 訓練 {len(train_files)} 張，驗證 {len(val_files)} 張")
     return temp_train_dir, temp_val_dir
 
-# 準備資料分割
+# 產生隨機種子並準備資料分割
+random_seed = random.randint(1, 10000)
+print(f"使用隨機種子: {random_seed}")
 print("正在準備訓練和驗證資料分割...")
-train_dir, val_dir = prepare_data_split('data', train_ratio=0.8, random_state=42)
+train_dir, val_dir = prepare_data_split('data', train_ratio=0.8, random_state=random_seed)
+
+# 取得預處理函數
+preprocess_input = get_preprocess_function()
 
 # 訓練數據生成器（包含數據增強）
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
-    rotation_range=30,
+    rotation_range=40,
     width_shift_range=0.3,
     height_shift_range=0.3,
     zoom_range=0.2,
+    shear_range=0.2,
+    brightness_range=[0.8, 1.2],
     horizontal_flip=True
 )
 
@@ -167,7 +161,7 @@ val_datagen = ImageDataGenerator(
 train_generator = train_datagen.flow_from_directory(
     train_dir,
     target_size=(360, 640),
-    batch_size=16,
+    batch_size=32,
     class_mode='categorical'
 )
 print(train_generator.class_indices)
@@ -183,52 +177,32 @@ validation_generator = val_datagen.flow_from_directory(
 
 print(validation_generator.class_indices)
 
-# 模型構建，使用 ImageNet 預訓練權重
-#base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(360, 640, 3))
-base_model = ResNet50(weights=None, include_top=False, input_shape=(360, 640, 3))
+# 使用共用模型架構建立模型
+model = create_resnet_model(input_shape=(360, 640, 3), num_classes=3)
 
-# 在基礎模型上添加自定義分類層
-x = base_model.output                    # 獲取基礎模型的輸出
-x = GlobalAveragePooling2D()(x)          # 全域平均池化層，將特徵圖轉為向量
-x = Dense(1024, activation='relu')(x)    # 全連接層，1024個神經元，ReLU激活函數
-x = Dropout(0.5)(x)                      # Dropout層，50%的機率隨機關閉神經元，防止過擬合
-predictions = Dense(3, activation='softmax')(x)  # 輸出層，3個類別，使用softmax激活函數
-
-# 建立完整模型
-model = Model(inputs=base_model.input, outputs=predictions)
-
-# 凍結基礎模型的權重，只訓練新增的分類層
-for layer in base_model.layers:
-    #layer.trainable = False
-    layer.trainable = True
-
-# 編譯模型
-model.compile(
-    optimizer='adam',                    # 使用Adam優化器
-    loss='categorical_crossentropy',     # 多分類交叉熵損失函數
-    metrics=['accuracy']                 # 監控準確率指標
-)
-
-# 產生帶有日期的檔案名稱
+# 產生帶有日期和隨機種子的檔案名稱
 current_date = datetime.now().strftime("%Y%m%d_%H%M")
-
-# 學習率調度器
-lr_scheduler = LearningRateScheduler(lr_schedule)
 
 # 使用自定義的最佳權重保存回調（會自動刪除舊檔案）
 checkpoint = BestModelCheckpoint(
-    f'best_resnet_model_360x640_{current_date}_val_acc_{{val_accuracy:.4f}}.h5',
+    f'best_resnet_model_360x640_{current_date}_rs{random_seed}_val_acc_{{val_accuracy:.4f}}.h5',
     monitor='val_accuracy',
     mode='max',
     verbose=1
 )
 
+# 添加EarlyStopping和ReduceLROnPlateau
+early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+lr_reducer = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6)
+
 # 訓練模型並記錄歷史
 history = model.fit(
     train_generator,
-    epochs=60,
+    epochs=1000,
     validation_data=validation_generator,
-    callbacks=[lr_scheduler, checkpoint]
+    callbacks=[checkpoint, early_stopping, lr_reducer],
+    workers=1,                    # 設定為單進程，避免 Windows 多進程問題
+    use_multiprocessing=False 
 )
 
 # 載入最佳權重進行最終評估
@@ -346,6 +320,7 @@ for i, wp in enumerate(wrong_predictions):
         
     except Exception as e:
         print(f"載入圖片 {wp['filename']} 時發生錯誤: {str(e)}")
+
 # 清理臨時目錄
 print("清理臨時目錄...")
 try:

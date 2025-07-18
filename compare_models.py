@@ -1,7 +1,4 @@
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
-from tensorflow.keras.applications.resnet50 import preprocess_input
+from model_architecture import create_resnet_model, get_preprocess_function, get_class_names
 import onnxruntime as ort
 import numpy as np
 import requests
@@ -71,22 +68,10 @@ FARM_SETTINGS = {
 }
 
 def rebuild_h5_model():
-    """重建 H5 模型架構"""
+    """重建 H5 模型架構（與訓練時完全一致）"""
     print("正在重建 H5 模型架構...")
-    # 建立 ResNet50 基礎模型
-    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(360, 640, 3))
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    predictions = Dense(3, activation='softmax')(x)
-    model = Model(inputs=base_model.input, outputs=predictions)
-    
-    # 凍結基礎模型的權重
-    for layer in base_model.layers:
-        layer.trainable = False
-    
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # 使用共用模型架構建立模型
+    model = create_resnet_model(input_shape=(360, 640, 3), num_classes=3)
     print("✓ H5 模型架構重建完成")
     return model
 
@@ -145,6 +130,7 @@ def preprocess_for_h5(image):
     img_array = np.array(image)
     img_array = np.expand_dims(img_array, axis=0)
     # 使用 TensorFlow ResNet50 預處理
+    preprocess_input = get_preprocess_function()
     img_array = preprocess_input(img_array)
     print(f"H5 預處理後形狀: {img_array.shape}")
     print(f"H5 預處理後數值範圍: [{img_array.min():.3f}, {img_array.max():.3f}]")
@@ -197,7 +183,7 @@ def predict_with_onnx(onnx_path, img_array):
 
 def compare_predictions(h5_pred, onnx_pred):
     """對比兩個模型的預測結果"""
-    class_names = ['camera_failure', 'with_pigs', 'without_pigs']
+    class_names = get_class_names()
     
     print("\n" + "="*60)
     print("預測結果對比:")
@@ -384,8 +370,8 @@ def process_farm_batch(farm_name, farm_setting, h5_model, onnx_model_path):
 def main():
     """主函數 - 批次處理所有牧場"""
     # 模型檔案路徑
-    h5_model_path = "best_resnet_model_360x640_20250702_1609_val_acc_0.9787.h5"
-    onnx_model_path = "best_resnet_model_360x640_20250702_1609_val_acc_0.9787.onnx"
+    h5_model_path = "best_resnet_model_360x640_20250718_1134_rs2658_val_acc_0.9730.h5"
+    onnx_model_path = "best_resnet_model_360x640_20250718_1134_rs2658_val_acc_0.9730.onnx"
     
     try:
         # 載入 H5 模型
