@@ -370,8 +370,8 @@ def process_farm_batch(farm_name, farm_setting, h5_model, onnx_model_path):
 def main():
     """主函數 - 批次處理所有牧場"""
     # 模型檔案路徑
-    h5_model_path = "best_resnet_model_360x640_20250718_1134_rs2658_val_acc_0.9730.h5"
-    onnx_model_path = "best_resnet_model_360x640_20250718_1134_rs2658_val_acc_0.9730.onnx"
+    h5_model_path = "best_resnet_model_360x640_20250722_1347_rs3703_val_acc_0.9646.h5"
+    onnx_model_path = "best_resnet_model_360x640_20250722_1347_rs3703_val_acc_0.9646.onnx"
     
     try:
         # 載入 H5 模型

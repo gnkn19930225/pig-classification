@@ -82,14 +82,14 @@ python train_resnet.py
 - 生成訓練過程圖表
 - 分析錯誤分類的樣本
 
-### 3. 比較模型
-```bash
-python compare_models.py
-```
-
-### 4. 轉換為ONNX格式
+### 3. 轉換為ONNX格式比較模型
 ```bash
 python convert_to_onnx.py
+```
+
+### 4. 比較模型
+```bash
+python compare_models.pypython convert_to_onnx.py
 ```
 
 ## 模型架構
