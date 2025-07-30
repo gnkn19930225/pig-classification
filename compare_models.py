@@ -9,6 +9,9 @@ import time
 import os
 from datetime import datetime, timezone, timedelta
 
+
+MODEL_BASE_NAME = "best_resnet_model_360x640_20250724_1427_rs1028_val_acc_0.9652"
+
 # 牧場設定字典
 # 格式：{牧場名稱: {主機位址, 輸出目錄}}
 FARM_SETTINGS = {
@@ -370,8 +373,8 @@ def process_farm_batch(farm_name, farm_setting, h5_model, onnx_model_path):
 def main():
     """主函數 - 批次處理所有牧場"""
     # 模型檔案路徑
-    h5_model_path = "best_resnet_model_360x640_20250722_1347_rs3703_val_acc_0.9646.h5"
-    onnx_model_path = "best_resnet_model_360x640_20250722_1347_rs3703_val_acc_0.9646.onnx"
+    h5_model_path = f"{MODEL_BASE_NAME}.h5"
+    onnx_model_path = f"{MODEL_BASE_NAME}.onnx"
     
     try:
         # 載入 H5 模型
