@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 
-MODEL_BASE_NAME = "best_resnet_model_360x640_20250724_1427_rs1028_val_acc_0.9652"
+MODEL_BASE_NAME = "best_resnet_model_360x640_20250731_1523_rs9837_epochs18"
 
 # 牧場設定字典
 # 格式：{牧場名稱: {主機位址, 輸出目錄}}
@@ -63,9 +63,9 @@ FARM_SETTINGS = {
         "host": "http://192.168.108.190:5000/",
         "output_dir": "關廟場"
     },
-    "112": {
-        "host": "http://192.168.112.190:5000/",
-        "output_dir": "大仁場"
+    "118": {
+        "host": "http://192.168.118.214:5000/",
+        "output_dir": "西港場"
     }
 }
 
