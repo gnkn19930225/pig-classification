@@ -4,11 +4,11 @@
 # 但允許所有 .py 檔案
 !*.py
 
+# 允許所有 .md 檔案
+!*.md
+
 # 允許 .gitignore 本身
 !.gitignore
-
-# 允許 README.md（如果需要）
-!README.md
 
 # 允許 requirements.txt（如果需要）
 !requirements.txt
